@@ -1,0 +1,5 @@
+<resources>
+    <string name="app_name">DemoJiagu</string>
+    <string name="first_activity">第一个activity的显示</string>
+    <string name="second_activity">第二个activity的显示</string>
+</resources>
