@@ -392,22 +392,6 @@ public class Reflect {
 		}
 	}
 
-    public Reflect callStatic(String name, Object... args) throws  ReflectException {
-        Class<?>[] types = types(args);
-
-        try {
-            Method method = exactMethod(name, types);
-            return on(method, null, args);
-        } catch (NoSuchMethodException e) {
-            try {
-                Method method = similarMethod(name, types);
-                return on(method, object, args);
-            } catch (NoSuchMethodException e1) {
-                throw new ReflectException(e1);
-            }
-        }
-
-    }
 
 	private Method exactMethod(String name, Class<?>[] types) throws NoSuchMethodException {
 		Class<?> type = type();

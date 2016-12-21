@@ -1,7 +1,7 @@
 package com.peter.example.petershell;
 
 import android.app.Application;
-import android.app.Instrumentation;
+import android.content.ContentProvider;
 import android.content.Context;
 import android.content.pm.ApplicationInfo;
 import android.content.pm.PackageManager;
@@ -13,10 +13,8 @@ import android.util.ArrayMap;
 import android.util.Log;
 
 import com.peter.example.petershell.util.ActivityThreadCompat;
-import com.peter.example.petershell.util.FieldUtils;
-import com.peter.example.petershell.util.MethodUtils;
-import com.peter.example.petershell.util.RefInvoke;
 import com.peter.example.petershell.util.Reflect;
+import com.peter.example.petershell.util.ReflectException;
 
 import java.io.BufferedInputStream;
 import java.io.ByteArrayInputStream;
@@ -37,7 +35,7 @@ import java.util.zip.ZipInputStream;
 import dalvik.system.DexClassLoader;
 
 /**
- * Created by Administrator on 2016/12/19.
+ * Created by zhukui on 2016/12/19.
  */
 
 public class StudApplication extends Application {
@@ -53,11 +51,11 @@ public class StudApplication extends Application {
         super.attachBaseContext(base);
         try {
             //创建两个文件夹payload_odex，payload_lib 私有的，可写的文件目录
-            File odex = this.getDir("payload_odex", MODE_PRIVATE);
-            File libs = this.getDir("payload_lib", MODE_PRIVATE);
+            File odex = this.getDir("source_odex", MODE_PRIVATE);
+            File libs = this.getDir("source_lib", MODE_PRIVATE);
             odexPath = odex.getAbsolutePath();
             libPath = libs.getAbsolutePath();
-            apkFileName = odex.getAbsolutePath() + "/payload.apk";
+            apkFileName = odex.getAbsolutePath() + "/source.apk";
             File dexFile = new File(apkFileName);
             if (!dexFile.exists())
             {
@@ -74,22 +72,24 @@ public class StudApplication extends Application {
             //下面两句不是太理解
             ArrayMap mPackages = Reflect.on(currentActivityThread).field("mPackages").get();
             WeakReference wr = (WeakReference) mPackages.get(packageName);
-            //创建被加壳apk的DexClassLoader对象  加载apk内的类和本地代码（c/c++代码）
+//            DexClassLoader dLoader = new DexClassLoader(apkFileName, odexPath,
+//                    libPath,getClassLoader());
+            //设置父classload为systemclassload 这个与壳classload完全隔离
             DexClassLoader dLoader = new DexClassLoader(apkFileName, odexPath,
-                    libPath, (ClassLoader) Reflect.on(wr.get()).field("mClassLoader").get());
+                    libPath, ClassLoader.getSystemClassLoader());
             Reflect.on(wr.get()).set("mClassLoader",dLoader);
-            Log.i("demo","classloader:"+dLoader);
+            Log.i("peterLog","classloader:"+dLoader);
 
             try{
                 Object actObj = dLoader.loadClass("com.peter.example.petershell.MainActivity");
-                Log.i("demo", "actObj:"+actObj);
+                Log.i("peterLog", "actObj:"+actObj);
             }catch(Exception e){
-                Log.i("demo", "activity:"+Log.getStackTraceString(e));
+                Log.i("peterLog", "activity:"+Log.getStackTraceString(e));
             }
 
 
         } catch (Exception e) {
-            Log.i("demo", "error:"+Log.getStackTraceString(e));
+            Log.i("peterLog", "error:"+Log.getStackTraceString(e));
             e.printStackTrace();
         }
 
@@ -100,7 +100,7 @@ public class StudApplication extends Application {
         {
             loadResources(apkFileName);
 
-            Log.i("demo", "onCreate");
+            Log.i("peterLog", "onCreate");
             // 如果源应用配置有Appliction对象，则替换为源应用Applicaiton，以便不影响源程序逻辑。
             String appClassName = null;
             try {
@@ -111,64 +111,52 @@ public class StudApplication extends Application {
                 if (bundle != null && bundle.containsKey("APPLICATION_CLASS_NAME")) {
                     appClassName = bundle.getString("APPLICATION_CLASS_NAME");//className 是配置在xml文件中的。
                 } else {
-                    Log.i("demo", "have no application class name");
+                    Log.i("peterLog", "have no application class name");
                     return;
                 }
             } catch (PackageManager.NameNotFoundException e) {
-                Log.i("demo", "error:"+Log.getStackTraceString(e));
+                Log.i("peterLog", "error:"+Log.getStackTraceString(e));
                 e.printStackTrace();
             }
             //有值的话调用该Applicaiton
-            Object currentActivityThread = RefInvoke.invokeStaticMethod(
-                    "android.app.ActivityThread", "currentActivityThread",
-                    new Class[] {}, new Object[] {});
-            Object mBoundApplication = RefInvoke.getFieldOjbect(
-                    "android.app.ActivityThread", currentActivityThread,
-                    "mBoundApplication");
-            Object loadedApkInfo = RefInvoke.getFieldOjbect(
-                    "android.app.ActivityThread$AppBindData",
-                    mBoundApplication, "info");
-            //把当前进程的mApplication 设置成了null
-            RefInvoke.setFieldOjbect("android.app.LoadedApk", "mApplication",
-                    loadedApkInfo, null);
-            Object oldApplication = RefInvoke.getFieldOjbect(
-                    "android.app.ActivityThread", currentActivityThread,
-                    "mInitialApplication");
-            //http://www.codeceo.com/article/android-context.html
-            ArrayList<Application> mAllApplications = (ArrayList<Application>) RefInvoke
-                    .getFieldOjbect("android.app.ActivityThread",
-                            currentActivityThread, "mAllApplications");
-            mAllApplications.remove(oldApplication);//删除oldApplication
 
-            ApplicationInfo appinfo_In_LoadedApk = (ApplicationInfo) RefInvoke
-                    .getFieldOjbect("android.app.LoadedApk", loadedApkInfo,
-                            "mApplicationInfo");
-            ApplicationInfo appinfo_In_AppBindData = (ApplicationInfo) RefInvoke
-                    .getFieldOjbect("android.app.ActivityThread$AppBindData",
-                            mBoundApplication, "appInfo");
+            Object currentActivityThread = null;
+            try {
+                currentActivityThread = ActivityThreadCompat.instance();
+            } catch (Exception e) {
+                e.printStackTrace();
+            }
+            Object mBoundApplication = Reflect.on(currentActivityThread).field("mBoundApplication").get();
+            Object loadedApkInfo = Reflect.on(mBoundApplication).field("info").get();
+            Log.d("peterLog",loadedApkInfo.getClass().toString());
+            //把当前进程的mApplication 设置成了null
+            Reflect.on(loadedApkInfo).set("mApplication",null);
+            Object oldApplication = Reflect.on(currentActivityThread).field("mInitialApplication").get();
+            ArrayList<Application> mAllApplications =Reflect.on(currentActivityThread).field("mAllApplications").get();
+            mAllApplications.remove(oldApplication);//删除oldApplication
+            ApplicationInfo appinfo_In_LoadedApk = Reflect.on(loadedApkInfo).field("mApplicationInfo").get();
+            ApplicationInfo appinfo_In_AppBindData = Reflect.on(mBoundApplication).field("appInfo").get();
             appinfo_In_LoadedApk.className = appClassName;
             appinfo_In_AppBindData.className = appClassName;
-            Application app = (Application) RefInvoke.invokeMethod(
-                    "android.app.LoadedApk", "makeApplication", loadedApkInfo,
-                    new Class[] { boolean.class, Instrumentation.class },
-                    new Object[] { false, null });//执行 makeApplication（false,null）
-            RefInvoke.setFieldOjbect("android.app.ActivityThread",
-                    "mInitialApplication", currentActivityThread, app);
 
+            Application app = Reflect.on(loadedApkInfo).call("makeApplication",false,null).get();
 
-            ArrayMap mProviderMap = (ArrayMap) RefInvoke.getFieldOjbect(
-                    "android.app.ActivityThread", currentActivityThread,
-                    "mProviderMap");
-            Iterator it = mProviderMap.values().iterator();
+            Reflect.on(currentActivityThread).set("mInitialApplication",app);
+
+            ArrayMap mProviderMap = Reflect.on(currentActivityThread).field("mProviderMap").get();
+            Iterator it = mProviderMap.keySet().iterator();
             while (it.hasNext()) {
                 Object providerClientRecord = it.next();
-                Object localProvider = RefInvoke.getFieldOjbect(
-                        "android.app.ActivityThread$ProviderClientRecord",
-                        providerClientRecord, "mLocalProvider");
-                RefInvoke.setFieldOjbect("android.content.ContentProvider",
-                        "mContext", localProvider, app);
+                Log.d("peterLog",providerClientRecord.toString());
+                try {
+                    ContentProvider contentProvider = Reflect.on(providerClientRecord).field("mLocalProvider").get();
+                    Reflect.on(contentProvider).set("mContext",app);
+                } catch (ReflectException e) {
+                    e.printStackTrace();
+                }
+
             }
-            Log.i("demo", "app:"+app);
+            Log.i("peterLog", "app:"+app);
             app.onCreate();
         }
     }
@@ -297,31 +285,21 @@ public class StudApplication extends Application {
         Reflect.on(newAssetManager).call("ensureStringBlocks");
         Collection<WeakReference<Resources>> references = null;
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.KITKAT) {
-            Class<?> resourcesManagerClass = Class.forName("android.app.ResourcesManager");
-            Object resourcesManager = MethodUtils.invokeStaticMethod(resourcesManagerClass, "getInstance");
-            if (FieldUtils.getField(resourcesManagerClass, "mActiveResources") != null) {
-                ArrayMap<?, WeakReference<Resources>> arrayMap = (ArrayMap) FieldUtils.readField(resourcesManager, "mActiveResources", true);
+            Object resourcesManager = Reflect.on("android.app.ResourcesManager").call("getInstance").get();
+            try {
+                ArrayMap<?, WeakReference<Resources>> arrayMap = Reflect.on(resourcesManager).field("mActiveResources").get();
                 references = arrayMap.values();
-            } else {
-                references = (Collection) FieldUtils.readField(resourcesManager, "mResourceReferences", true);
+            } catch (ReflectException e) {
+                e.printStackTrace();
+                references = (Collection) Reflect.on(resourcesManager).field("mResourceReferences").get();
             }
-//            Object resourcesManager = Reflect.on("android.app.ResourcesManager").call("getInstance").get();
-//            try {
-//                ArrayMap<?, WeakReference<Resources>> arrayMap = Reflect.on(resourcesManager).field("mActiveResources").get();
-//                references = arrayMap.values();
-//            } catch (ReflectException e) {
-//                e.printStackTrace();
-//                references = (Collection) Reflect.on(resourcesManager).field("mResourceReferences").get();
-//            }
         } else {
-            HashMap<?, WeakReference<Resources>> map = (HashMap) FieldUtils.readField(ActivityThreadCompat.instance(), "mActiveResources", true);
-            references = map.values();
-//            try {
-//                HashMap<?, WeakReference<Resources>> map = Reflect.on(ActivityThreadCompat.instance()).field("mActiveResources").get();
-//                references = map.values();
-//            } catch (Exception e) {
-//                e.printStackTrace();
-//            }
+            try {
+                HashMap<?, WeakReference<Resources>> map = Reflect.on(ActivityThreadCompat.instance()).field("mActiveResources").get();
+                references = map.values();
+            } catch (Exception e) {
+                e.printStackTrace();
+            }
         }
 
         for (WeakReference<Resources> wr : references) {
@@ -329,12 +307,9 @@ public class StudApplication extends Application {
             if (resources == null) continue;
 
             try {
-                FieldUtils.writeField(resources, "mAssets", newAssetManager);
-              //  Reflect.on(resources).set("mAssets", newAssetManager);
+                Reflect.on(resources).set("mAssets", newAssetManager);
             } catch (Throwable ignore) {
-                Object resourceImpl = FieldUtils.readField(resources, "mResourcesImpl", true);
-                FieldUtils.writeField(resourceImpl, "mAssets", newAssetManager);
-               // Reflect.on(resources).field("mResourcesImpl").set("mAssets", newAssetManager)
+                Reflect.on(resources).field("mResourcesImpl").set("mAssets", newAssetManager);
             }
 
             resources.updateConfiguration(resources.getConfiguration(), resources.getDisplayMetrics());
@@ -346,10 +321,9 @@ public class StudApplication extends Application {
                 if (resources == null) continue;
 
                 // android.util.Pools$SynchronizedPool<TypedArray>
-                Object typedArrayPool = FieldUtils.readField(resources, "mTypedArrayPool", true);
-
+                Object typedArrayPool = Reflect.on(resources).field("mTypedArrayPool").get();
                 // Clear all the pools
-                while (MethodUtils.invokeMethod(typedArrayPool, "acquire") != null) ;
+                while(Reflect.on(typedArrayPool).call("acquire").get() != null);
             }
         }
     }

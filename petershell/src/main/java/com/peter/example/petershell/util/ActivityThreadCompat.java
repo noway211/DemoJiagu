@@ -1,6 +1,5 @@
 package com.peter.example.petershell.util;
 
-import java.lang.reflect.InvocationTargetException;
 
 public class ActivityThreadCompat {
 
@@ -8,9 +7,9 @@ public class ActivityThreadCompat {
 
     private static Class sClass;
 
-    public synchronized static final Object instance() throws ClassNotFoundException, NoSuchMethodException, IllegalAccessException, InvocationTargetException {
+    public synchronized static final Object instance() throws  ReflectException{
         if (sActivityThread == null) {
-            sActivityThread = RefInvoke.invokeStaticMethod("android.app.ActivityThread", "currentActivityThread", new Class[] {}, new Object[] {});
+            sActivityThread = Reflect.on("android.app.ActivityThread").call("currentActivityThread").get();
         }
         return sActivityThread;
     }
