@@ -17,7 +17,6 @@ import com.peter.example.petershell.util.FieldUtils;
 import com.peter.example.petershell.util.MethodUtils;
 import com.peter.example.petershell.util.RefInvoke;
 import com.peter.example.petershell.util.Reflect;
-import com.peter.example.petershell.util.ReflectException;
 
 import java.io.BufferedInputStream;
 import java.io.ByteArrayInputStream;
@@ -28,8 +27,6 @@ import java.io.FileInputStream;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.lang.ref.WeakReference;
-import java.lang.reflect.InvocationTargetException;
-import java.lang.reflect.Method;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashMap;
@@ -76,25 +73,15 @@ public class StudApplication extends Application {
             String packageName = this.getPackageName();//当前apk的包名
             //下面两句不是太理解
             ArrayMap mPackages = Reflect.on(currentActivityThread).field("mPackages").get();
-//            ArrayMap mPackages = (ArrayMap) RefInvoke.getFieldOjbect(
-//                    "android.app.ActivityThread", currentActivityThread,
-//                    "mPackages");
             WeakReference wr = (WeakReference) mPackages.get(packageName);
             //创建被加壳apk的DexClassLoader对象  加载apk内的类和本地代码（c/c++代码）
             DexClassLoader dLoader = new DexClassLoader(apkFileName, odexPath,
                     libPath, (ClassLoader) Reflect.on(wr.get()).field("mClassLoader").get());
-//            DexClassLoader dLoader = new DexClassLoader(apkFileName, odexPath,
-//                    libPath, (ClassLoader) RefInvoke.getFieldOjbect(
-//                    "android.app.LoadedApk", wr.get(), "mClassLoader"));
-            //base.getClassLoader(); 是不是就等同于 (ClassLoader) RefInvoke.getFieldOjbect()? 有空验证下//?
-            //把当前进程的DexClassLoader 设置成了被加壳apk的DexClassLoader  ----有点c++中进程环境的意思~~
             Reflect.on(wr.get()).set("mClassLoader",dLoader);
-//            RefInvoke.setFieldOjbect("android.app.LoadedApk", "mClassLoader",
-//                    wr.get(), dLoader);
             Log.i("demo","classloader:"+dLoader);
 
             try{
-                Object actObj = dLoader.loadClass("com.example.forceapkobj.MainActivity");
+                Object actObj = dLoader.loadClass("com.peter.example.petershell.MainActivity");
                 Log.i("demo", "actObj:"+actObj);
             }catch(Exception e){
                 Log.i("demo", "activity:"+Log.getStackTraceString(e));
@@ -295,9 +282,6 @@ public class StudApplication extends Application {
         AssetManager assetManager = null;
         try {
             assetManager = AssetManager.class.newInstance();
-//            Method addAssetPath = assetManager.getClass().getMethod("addAssetPath", String.class);
-//            addAssetPath.setAccessible(true);
-//            addAssetPath.invoke(assetManager, dexPath);
             Reflect.on(assetManager).call("addAssetPath",dexPath);
             setAPKResources(assetManager);
         } catch (IllegalAccessException e) {
@@ -310,18 +294,11 @@ public class StudApplication extends Application {
 
 
     private void setAPKResources(AssetManager newAssetManager) throws  Exception{
-//        Method method = newAssetManager.getClass().getDeclaredMethod("ensureStringBlocks", null);
-//        method.setAccessible(true);
-//        if (method == null) {
-//            throw new NoSuchMethodException("No such accessible method: ");
-//        }
-//        method.invoke(newAssetManager, null);
         Reflect.on(newAssetManager).call("ensureStringBlocks");
         Collection<WeakReference<Resources>> references = null;
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.KITKAT) {
             Class<?> resourcesManagerClass = Class.forName("android.app.ResourcesManager");
             Object resourcesManager = MethodUtils.invokeStaticMethod(resourcesManagerClass, "getInstance");
-
             if (FieldUtils.getField(resourcesManagerClass, "mActiveResources") != null) {
                 ArrayMap<?, WeakReference<Resources>> arrayMap = (ArrayMap) FieldUtils.readField(resourcesManager, "mActiveResources", true);
                 references = arrayMap.values();

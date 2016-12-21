@@ -13,8 +13,8 @@ import android.widget.Toast;
 
 public class SecondActivity extends Activity {
     @Override
-    public void onCreate(Bundle savedInstanceState, PersistableBundle persistentState) {
-        super.onCreate(savedInstanceState, persistentState);
+    public void onCreate(Bundle savedInstanceState) {
+        super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_second);
         Log.d("demo","SecondActivity"+this.getApplication().toString());
     }
