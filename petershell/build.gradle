@@ -22,6 +22,27 @@ android {
     }
 }
 
+task copydex(dependsOn: ['packageRelease']) {
+
+    def fileName = "classes.dex"
+    def fromFile = ".\\build\\intermediates\\transforms\\dex\\release\\folders\\1000\\1f\\main\\" + fileName
+    def intoFile = ".\\..\\entrylib\\source"
+    def appName = "petershell.dex"
+        // copy --> rename
+    println("=====================build.doLast success.=========================")
+    copy {
+        from fromFile
+        into intoFile
+
+        rename {
+            appName
+        }
+
+    }
+    println("=====================build.doLast success.=========================")
+}
+
+
 dependencies {
     compile fileTree(dir: 'libs', include: ['*.jar'])
     androidTestCompile('com.android.support.test.espresso:espresso-core:2.2.2', {
@@ -30,3 +51,4 @@ dependencies {
    // compile 'com.android.support:appcompat-v7:24.2.1'
     testCompile 'junit:junit:4.12'
 }
+
