@@ -22,8 +22,10 @@ import java.io.ByteArrayOutputStream;
 import java.io.DataInputStream;
 import java.io.File;
 import java.io.FileInputStream;
+import java.io.FileNotFoundException;
 import java.io.FileOutputStream;
 import java.io.IOException;
+import java.io.RandomAccessFile;
 import java.lang.ref.WeakReference;
 import java.util.ArrayList;
 import java.util.Collection;
@@ -74,6 +76,9 @@ public class StudApplication extends Application {
             WeakReference wr = (WeakReference) mPackages.get(packageName);
 //            DexClassLoader dLoader = new DexClassLoader(apkFileName, odexPath,
 //                    libPath,getClassLoader());
+
+
+
             //设置父classload为systemclassload 这个与壳classload完全隔离
             DexClassLoader dLoader = new DexClassLoader(apkFileName, odexPath,
                     libPath, ClassLoader.getSystemClassLoader());
@@ -95,6 +100,24 @@ public class StudApplication extends Application {
 
     }
 
+    private String getLibPath(){
+        Boolean isx86 = isX86Arch();
+        Boolean is64 = Boolean.valueOf(false);
+        Boolean ismips = Boolean.valueOf(false);
+
+        if (Build.CPU_ABI.contains("64") || Build.CPU_ABI2.contains("64")) {
+            is64 = Boolean.valueOf(true);
+        }
+        if (Build.CPU_ABI.contains("mips") || Build.CPU_ABI2.contains("mips")) {
+            ismips = Boolean.valueOf(true);
+        }
+
+        File libfile = new File(libPath);
+
+        return libPath;
+    }
+
+
     @Override
     public void onCreate() {
         {
@@ -110,6 +133,9 @@ public class StudApplication extends Application {
                 Bundle bundle = ai.metaData;
                 if (bundle != null && bundle.containsKey("APPLICATION_CLASS_NAME")) {
                     appClassName = bundle.getString("APPLICATION_CLASS_NAME");//className 是配置在xml文件中的。
+                    if(appClassName.startsWith(".")){
+                        appClassName = getPackageName()+appClassName;
+                    }
                 } else {
                     Log.i("peterLog", "have no application class name");
                     return;
@@ -202,11 +228,15 @@ public class StudApplication extends Application {
                 localZipInputStream.close();
                 break;
             }
-            //取出被加壳apk用到的so文件，放到 libPath中（data/data/包名/payload_lib)
+            //取出被加壳apk用到的so文件，放到 libPath中（data/data/包名/source_lib)
             String name = localZipEntry.getName();
             if (name.startsWith("lib/") && name.endsWith(".so")) {
                 File storeFile = new File(libPath + "/"
-                        + name.substring(name.lastIndexOf('/')));
+                        + name.substring(4));
+                File pfile = storeFile.getParentFile();
+                if(!pfile.exists()){
+                    pfile.mkdirs();
+                }
                 storeFile.createNewFile();
                 FileOutputStream fos = new FileOutputStream(storeFile);
                 byte[] arrayOfByte = new byte[1024];
@@ -326,6 +356,36 @@ public class StudApplication extends Application {
                 while(Reflect.on(typedArrayPool).call("acquire").get() != null);
             }
         }
+    }
+
+
+    public static Boolean isX86Arch() {
+        try {
+            for (String contains : Build.SUPPORTED_32_BIT_ABIS) {
+                if (contains.contains("x86")) {
+                    return Boolean.valueOf(true);
+                }
+            }
+        } catch (NoSuchFieldError e) {
+            if (Build.CPU_ABI.contains("x86") || Build.CPU_ABI2.contains("x86")) {
+                return Boolean.valueOf(true);
+            }
+            try {
+                RandomAccessFile randomAccessFile = new RandomAccessFile("/system/build.prop", "r");
+                String readLine = randomAccessFile.readLine();
+                while (readLine != null) {
+                    if (readLine.contains("ro.product.cpu.abi") && readLine.contains("x86")) {
+                        return Boolean.valueOf(true);
+                    }
+                    readLine = randomAccessFile.readLine();
+                }
+            } catch (FileNotFoundException e2) {
+                e2.printStackTrace();
+            } catch (IOException e3) {
+                e3.printStackTrace();
+            }
+        }
+        return Boolean.valueOf(false);
     }
 
 

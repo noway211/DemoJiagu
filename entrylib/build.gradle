@@ -1,8 +1,32 @@
-apply plugin: 'java'
 
-dependencies {
-    compile fileTree(dir: 'libs', include: ['*.jar'])
+apply plugin: 'eu.appsatori.fatjar'
+
+
+buildscript {
+    repositories {
+        mavenCentral()
+    }
+
+}
+processResources {
+    from('source/') {
+        include '**/*.dex'
+        into 'source'
+    }
+
+    includeEmptyDirs = false
+}
+gradle.taskGraph.whenReady {
+    fatJar {
+        manifest {
+            attributes("Main-Class": "com.peter.entry.MainClass")
+        }
+    }
+
+
 }
 
-sourceCompatibility = "1.7"
-targetCompatibility = "1.7"
+task cleanOutputDirectory(type: Delete) {
+    delete fileTree(dir: jar.destinationDir.getPath())
+}
+
