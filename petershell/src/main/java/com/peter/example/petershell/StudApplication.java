@@ -24,6 +24,7 @@ import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileNotFoundException;
 import java.io.FileOutputStream;
+import java.io.FilenameFilter;
 import java.io.IOException;
 import java.io.RandomAccessFile;
 import java.lang.ref.WeakReference;
@@ -59,8 +60,7 @@ public class StudApplication extends Application {
             libPath = libs.getAbsolutePath();
             apkFileName = odex.getAbsolutePath() + "/source.apk";
             File dexFile = new File(apkFileName);
-            if (!dexFile.exists())
-            {
+            if (!dexFile.exists()) {
                 dexFile.createNewFile();  //在payload_odex文件夹内，创建payload.apk
                 // 读取程序classes.dex文件
                 byte[] dexdata = this.readDexFileFromApk();
@@ -78,29 +78,30 @@ public class StudApplication extends Application {
 //                    libPath,getClassLoader());
 
 
-
+            String reallibpath = getLibPath();
+            Log.i("peterLog", " reallibpath"+reallibpath);
             //设置父classload为systemclassload 这个与壳classload完全隔离
             DexClassLoader dLoader = new DexClassLoader(apkFileName, odexPath,
-                    libPath, ClassLoader.getSystemClassLoader());
-            Reflect.on(wr.get()).set("mClassLoader",dLoader);
-            Log.i("peterLog","classloader:"+dLoader);
+                    reallibpath, ClassLoader.getSystemClassLoader());
+            Reflect.on(wr.get()).set("mClassLoader", dLoader);
+            Log.i("peterLog", "classloader:" + dLoader+" "+reallibpath);
 
-            try{
+            try {
                 Object actObj = dLoader.loadClass("com.peter.example.petershell.MainActivity");
-                Log.i("peterLog", "actObj:"+actObj);
-            }catch(Exception e){
-                Log.i("peterLog", "activity:"+Log.getStackTraceString(e));
+                Log.i("peterLog", "actObj:" + actObj);
+            } catch (Exception e) {
+                Log.i("peterLog", "activity:" + Log.getStackTraceString(e));
             }
 
 
         } catch (Exception e) {
-            Log.i("peterLog", "error:"+Log.getStackTraceString(e));
+            Log.i("peterLog", "error:" + Log.getStackTraceString(e));
             e.printStackTrace();
         }
 
     }
 
-    private String getLibPath(){
+    private String getLibPath() {
         Boolean isx86 = isX86Arch();
         Boolean is64 = Boolean.valueOf(false);
         Boolean ismips = Boolean.valueOf(false);
@@ -113,8 +114,72 @@ public class StudApplication extends Application {
         }
 
         File libfile = new File(libPath);
+        String[] subfiles = libfile.list();
+        if (subfiles != null && subfiles.length > 0) {
+            if (isx86) {
+                String[] x86list = getsubfilesByCpuAbi("x86");
+                if (x86list != null && x86list.length > 0) {
+                    return new File(libPath, x86list[0]).getAbsolutePath();
+                }
+            } else if (ismips) {
+                String[] mipslist = getsubfilesByCpuAbi("mips");
+                if (mipslist != null && mipslist.length > 0) {
+                    return new File(libPath, mipslist[0]).getAbsolutePath();
+                }
+            } else {
+                String[] armlist = getsubfilesByCpuAbi("arm");
+                if (armlist != null && armlist.length > 0) {
 
+                    boolean hasarmv8a = false;
+                    boolean hasv7a = false;
+                    boolean hasarm = false;
+                    for (String armItem : armlist) {
+                        if (armItem.equalsIgnoreCase("armeabi-v7a")) {
+                            hasv7a = true;
+                        }
+                        if (armItem.equalsIgnoreCase("armeabi")) {
+                            hasarm = true;
+                        }
+                        if (armItem.equalsIgnoreCase("arm64-v8a")) {
+                            hasarmv8a = true;
+                        }
+                    }
+                    if (is64 && hasarmv8a) {
+                        return new File(libPath, "arm64-v8a").getAbsolutePath();
+                    }
+                    if (hasv7a) {
+                        return new File(libPath, "armeabi-v7a").getAbsolutePath();
+                    }
+                    if (hasarm) {
+                        return new File(libPath, "armeabi").getAbsolutePath();
+                    }
+                }
+
+
+            }
+        }
         return libPath;
+    }
+
+
+
+
+
+
+
+
+    private String[] getsubfilesByCpuAbi(final String keyname){
+        File libfile = new File(libPath);
+        String[] sublists=libfile.list(new FilenameFilter() {
+            @Override
+            public boolean accept(File dir, String name) {
+                if(name.contains(keyname)){
+                    return true;
+                }
+                return false;
+            }
+        });
+        return sublists;
     }
 
 
@@ -218,6 +283,7 @@ public class StudApplication extends Application {
         } catch (IOException localIOException) {
             throw new RuntimeException(localIOException);
         }
+        Log.d("peterLog","write source apk file");
 
         //分析被加壳的apk文件
         ZipInputStream localZipInputStream = new ZipInputStream(
@@ -237,6 +303,7 @@ public class StudApplication extends Application {
                 if(!pfile.exists()){
                     pfile.mkdirs();
                 }
+                Log.d("peterLog","so file:"+storeFile.getAbsolutePath());
                 storeFile.createNewFile();
                 FileOutputStream fos = new FileOutputStream(storeFile);
                 byte[] arrayOfByte = new byte[1024];

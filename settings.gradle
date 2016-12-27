@@ -1,1 +1,1 @@
-include ':app', ':entrylib', ':petershell'
+include ':app', ':entrylib', ':petershell', ':pythonlib'

@@ -45,7 +45,7 @@ def repackApk(inputApk):
     del_file(temp_apk_recompile_dir)
 
     #反编译apk
-    if game_cmd.shell_run_ok(game_conf.APKTOOL+ " d "+cacheApkFile + " -o "+temp_apk_recompile_dir) == False:
+    if game_cmd.run_shell_cmd_nopipe(game_conf.APKTOOL+ " d "+cacheApkFile + " -o "+temp_apk_recompile_dir) == False:
         game_conf.exit(game_conf.EXIT_DECODE_APK_ERR, "decompile apk fail")
 
     print "begin create new dex"
@@ -71,7 +71,7 @@ def repackApk(inputApk):
 
 
 
-    if game_cmd.shell_run_ok(game_conf.APKTOOL+ " b "+temp_apk_recompile_dir + " -o "+rpaklib+ "/new.apk") == False:
+    if game_cmd.run_shell_cmd_nopipe(game_conf.APKTOOL+ " b "+temp_apk_recompile_dir + " -o "+rpaklib+ "/new.apk") == False:
         game_conf.exit(game_conf.EXIT_REPACKAGE_ERR, "apk repack fail")
 
     #签名
