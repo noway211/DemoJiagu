@@ -20,6 +20,15 @@ public class SecondActivity extends Activity {
     }
 
     public  void onClick(View view) {
-        Toast.makeText(this,"点击textView",Toast.LENGTH_SHORT).show();
+
+
+        Toast.makeText(this,"点击textView"+getCryptSeed(),Toast.LENGTH_SHORT).show();
+
+    }
+
+    public static native String getCryptSeed();
+
+    static {
+        System.loadLibrary("jenv");
     }
 }

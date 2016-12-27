@@ -59,8 +59,8 @@ def repackApk(inputApk):
         del_file(temp_apk_recompile_dir+"/smali")
     if os.path.exists(temp_apk_recompile_dir+"/assets"):
         del_file(temp_apk_recompile_dir+"/assets")
-    if os.path.exists(temp_apk_recompile_dir+"/lib"):
-        del_file(temp_apk_recompile_dir+"/lib")
+    # if os.path.exists(temp_apk_recompile_dir+"/lib"):
+    #     del_file(temp_apk_recompile_dir+"/lib")
 
     #拷贝新的dex到编译目录
     shutil.copy(rpaklib+"/classes.dex", temp_apk_recompile_dir+"/classes.dex")

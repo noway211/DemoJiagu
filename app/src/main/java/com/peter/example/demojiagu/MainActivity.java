@@ -17,6 +17,7 @@ public class MainActivity extends Activity {
         setContentView(R.layout.activity_main);
         Log.d("demo","MainActivity"+this.getApplication().toString());
     }
+
     public void onClick(View view) {
         Intent intent = new Intent(this,SecondActivity.class);
         startActivity(intent);
