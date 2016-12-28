@@ -2,10 +2,11 @@ package com.peter.example.demojiagu;
 
 import android.app.Activity;
 import android.os.Bundle;
-import android.os.PersistableBundle;
 import android.util.Log;
 import android.view.View;
 import android.widget.Toast;
+
+import com.duowan.jni.JEnv;
 
 /**
  * Created by Administrator on 2016/12/19.
@@ -22,13 +23,8 @@ public class SecondActivity extends Activity {
     public  void onClick(View view) {
 
 
-        Toast.makeText(this,"点击textView"+getCryptSeed(),Toast.LENGTH_SHORT).show();
+        Toast.makeText(this,"点击textView"+ JEnv.getCryptSeed(),Toast.LENGTH_SHORT).show();
 
     }
 
-    public static native String getCryptSeed();
-
-    static {
-        System.loadLibrary("jenv");
-    }
 }
