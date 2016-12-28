@@ -26,6 +26,25 @@ gradle.taskGraph.whenReady {
 
 }
 
+task copyjar(dependsOn: ['fatJar']) {
+
+    def fileName = "entrylib.jar"
+    def fromFile = ".\\build\\libs\\" + fileName
+    def intoFile = ".\\..\\pythonlib\\src\\python\\"
+    def appName = "petershell.jar"
+    // copy --> rename
+    copy {
+        from fromFile
+        into intoFile
+
+        rename {
+            appName
+        }
+
+    }
+    println("=====================build.doLast success.=========================")
+}
+
 task cleanOutputDirectory(type: Delete) {
     delete fileTree(dir: jar.destinationDir.getPath())
 }

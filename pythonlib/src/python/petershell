@@ -42,7 +42,7 @@ prog="${progdir}"/`basename "${prog}"`
 cd "${oldwd}"
 
 
-jarfile=entrylib.jar
+jarfile=petershell.jar
 libdir="$progdir"
 if [ ! -r "$libdir/$jarfile" ]
 then

@@ -3,6 +3,7 @@ package com.peter.example.petershell;
 import android.app.Application;
 import android.content.ContentProvider;
 import android.content.Context;
+import android.content.SharedPreferences;
 import android.content.pm.ApplicationInfo;
 import android.content.pm.PackageManager;
 import android.content.res.AssetManager;
@@ -44,29 +45,63 @@ import dalvik.system.DexClassLoader;
 public class StudApplication extends Application {
 
     private static final String appkey = "APPLICATION_CLASS_NAME";
-    private String apkFileName;
     private String odexPath;
     private String libPath;
+    private String sourcePath;
+
+    public static Boolean isX86Arch() {
+        try {
+            for (String contains : Build.SUPPORTED_32_BIT_ABIS) {
+                if (contains.contains("x86")) {
+                    return Boolean.valueOf(true);
+                }
+            }
+        } catch (NoSuchFieldError e) {
+            if (Build.CPU_ABI.contains("x86") || Build.CPU_ABI2.contains("x86")) {
+                return Boolean.valueOf(true);
+            }
+            try {
+                RandomAccessFile randomAccessFile = new RandomAccessFile("/system/build.prop", "r");
+                String readLine = randomAccessFile.readLine();
+                while (readLine != null) {
+                    if (readLine.contains("ro.product.cpu.abi") && readLine.contains("x86")) {
+                        return Boolean.valueOf(true);
+                    }
+                    readLine = randomAccessFile.readLine();
+                }
+            } catch (FileNotFoundException e2) {
+                e2.printStackTrace();
+            } catch (IOException e3) {
+                e3.printStackTrace();
+            }
+        }
+        return Boolean.valueOf(false);
+    }
 
     //这是context 赋值
     @Override
     protected void attachBaseContext(Context base) {
         super.attachBaseContext(base);
         try {
-            //创建两个文件夹payload_odex，payload_lib 私有的，可写的文件目录
+            File sourceapk = this.getDir("source_dex", MODE_PRIVATE);
             File odex = this.getDir("source_odex", MODE_PRIVATE);
             File libs = this.getDir("source_lib", MODE_PRIVATE);
             odexPath = odex.getAbsolutePath();
             libPath = libs.getAbsolutePath();
-            apkFileName = odex.getAbsolutePath() + "/source.apk";
-            File dexFile = new File(apkFileName);
-            if (!dexFile.exists()) {
-                dexFile.createNewFile();  //在payload_odex文件夹内，创建payload.apk
-                // 读取程序classes.dex文件
-                byte[] dexdata = this.readDexFileFromApk();
-
-                // 分离出解壳后的apk文件已用于动态加载
-                this.splitPayLoadFromDex(dexdata);
+            sourcePath = sourceapk.getAbsolutePath();
+            SharedPreferences sp = getSharedPreferences("dexconfig",Context.MODE_PRIVATE);
+            Boolean isInit = sp.getBoolean("initdex",false);
+            if (!isInit) {
+                try {
+                    // 读取程序classes.dex文件
+                    byte[] dexdata = this.readDexFileFromApk();
+                    // 分离出解壳后的apk文件已用于动态加载
+                    this.splitPayLoadFromDex(dexdata);
+                    dexdata = null;
+                    sp.edit().putBoolean("initdex",true).commit();
+                } catch (Exception e1) {
+                    e1.printStackTrace();
+                }
             }
             // 配置动态加载环境
             Object currentActivityThread = ActivityThreadCompat.instance();
@@ -74,33 +109,58 @@ public class StudApplication extends Application {
             //下面两句不是太理解
             ArrayMap mPackages = Reflect.on(currentActivityThread).field("mPackages").get();
             WeakReference wr = (WeakReference) mPackages.get(packageName);
-//            DexClassLoader dLoader = new DexClassLoader(apkFileName, odexPath,
-//                    libPath,getClassLoader());
 
-
-            String reallibpath = getLibPath();
-            Log.i("peterLog", " reallibpath"+reallibpath);
+            //String reallibpath = getLibPath();
+            String reallibpath = getSourceApkLibPath();
+            String dexPath = getDexpath();
+            Log.i("peterLog", " reallibpath===="+reallibpath);
+            Log.i("peterLog", " dexPath==="+dexPath);
             //设置父classload为systemclassload 这个与壳classload完全隔离
-            DexClassLoader dLoader = new DexClassLoader(apkFileName, odexPath,
+
+            DexClassLoader dLoader = new DexClassLoader(dexPath, odexPath,
                     reallibpath, ClassLoader.getSystemClassLoader());
             Reflect.on(wr.get()).set("mClassLoader", dLoader);
-            Log.i("peterLog", "classloader:" + dLoader+" "+reallibpath);
 
             try {
                 Object actObj = dLoader.loadClass("com.peter.example.petershell.MainActivity");
                 Log.i("peterLog", "actObj:" + actObj);
             } catch (Exception e) {
-                Log.i("peterLog", "activity:" + Log.getStackTraceString(e));
             }
 
 
         } catch (Exception e) {
-            Log.i("peterLog", "error:" + Log.getStackTraceString(e));
             e.printStackTrace();
         }
 
     }
 
+    private String getSourceApkLibPath(){
+        ApplicationInfo info = getApplicationInfo();
+        return new File(getApplicationInfo().dataDir,"lib").getPath();
+    }
+
+    private String getDexpath(){
+        File file = new File(sourcePath);
+        File[] subfiles = file.listFiles(new FilenameFilter() {
+            @Override
+            public boolean accept(File dir, String name) {
+                if(name.endsWith(".dex")){
+                    return  true;
+                }
+                return false;
+            }
+        });
+        StringBuffer sb = new StringBuffer();
+        if(subfiles != null && subfiles.length >0){
+            for(File f:subfiles){
+                sb.append(f.getAbsolutePath()).append(File.pathSeparator);
+            }
+        }
+        sb.deleteCharAt(sb.length()-1);
+        return sb.toString();
+    }
+
+    @Deprecated
     private String getLibPath() {
         Boolean isx86 = isX86Arch();
         Boolean is64 = Boolean.valueOf(false);
@@ -161,13 +221,6 @@ public class StudApplication extends Application {
         return libPath;
     }
 
-
-
-
-
-
-
-
     private String[] getsubfilesByCpuAbi(final String keyname){
         File libfile = new File(libPath);
         String[] sublists=libfile.list(new FilenameFilter() {
@@ -182,13 +235,11 @@ public class StudApplication extends Application {
         return sublists;
     }
 
-
     @Override
     public void onCreate() {
         {
-            loadResources(apkFileName);
+           // loadResources(apkFileName);
 
-            Log.i("peterLog", "onCreate");
             // 如果源应用配置有Appliction对象，则替换为源应用Applicaiton，以便不影响源程序逻辑。
             String appClassName = null;
             try {
@@ -253,7 +304,7 @@ public class StudApplication extends Application {
     }
 
     /**
-     * 释放被加壳的apk文件，so文件
+     * 解密原始的dex文件
      * @param apkdata
      */
     private void splitPayLoadFromDex(byte[] apkdata) throws IOException {
@@ -264,7 +315,6 @@ public class StudApplication extends Application {
         ByteArrayInputStream bais = new ByteArrayInputStream(dexlen);
         DataInputStream in = new DataInputStream(bais);
         int readInt = in.readInt();
-        System.out.println(Integer.toHexString(readInt));
         byte[] newdex = new byte[readInt];
         //把被加壳apk内容拷贝到newdex中
         System.arraycopy(apkdata, ablen - 4 - readInt, newdex, 0, readInt);
@@ -273,54 +323,21 @@ public class StudApplication extends Application {
 
         //对源程序Apk进行解密
         newdex = decrypt(newdex);
-
-        //写入apk文件
-        File file = new File(apkFileName);
-        try {
+        bais = new ByteArrayInputStream(newdex);
+        in = new DataInputStream(bais);
+        int dexnum = in.read();
+        Log.d("peterlog","classdex 个数====="+dexnum);
+        for(int i=0;i<dexnum;i++){
+            File file = new File(sourcePath,"source"+i+".dex");
             FileOutputStream localFileOutputStream = new FileOutputStream(file);
-            localFileOutputStream.write(newdex);
+            int length = in.readInt();
+            byte[] tem = new byte[length];
+            in.read(tem);
+            localFileOutputStream.write(tem);
             localFileOutputStream.close();
-        } catch (IOException localIOException) {
-            throw new RuntimeException(localIOException);
         }
-        Log.d("peterLog","write source apk file");
-
-        //分析被加壳的apk文件
-        ZipInputStream localZipInputStream = new ZipInputStream(
-                new BufferedInputStream(new FileInputStream(file)));
-        while (true) {
-            ZipEntry localZipEntry = localZipInputStream.getNextEntry();//不了解这个是否也遍历子目录，看样子应该是遍历的
-            if (localZipEntry == null) {
-                localZipInputStream.close();
-                break;
-            }
-            //取出被加壳apk用到的so文件，放到 libPath中（data/data/包名/source_lib)
-            String name = localZipEntry.getName();
-            if (name.startsWith("lib/") && name.endsWith(".so")) {
-                File storeFile = new File(libPath + "/"
-                        + name.substring(4));
-                File pfile = storeFile.getParentFile();
-                if(!pfile.exists()){
-                    pfile.mkdirs();
-                }
-                Log.d("peterLog","so file:"+storeFile.getAbsolutePath());
-                storeFile.createNewFile();
-                FileOutputStream fos = new FileOutputStream(storeFile);
-                byte[] arrayOfByte = new byte[1024];
-                while (true) {
-                    int i = localZipInputStream.read(arrayOfByte);
-                    if (i == -1)
-                        break;
-                    fos.write(arrayOfByte, 0, i);
-                }
-                fos.flush();
-                fos.close();
-            }
-            localZipInputStream.closeEntry();
-        }
-        localZipInputStream.close();
-
-
+        in.close();
+        bais.close();
     }
 
     /**
@@ -354,7 +371,6 @@ public class StudApplication extends Application {
         return dexByteArrayOutputStream.toByteArray();
     }
 
-
     // //直接返回数据，读者可以添加自己解密方法
     private byte[] decrypt(byte[] srcdata) {
         for(int i=0;i<srcdata.length;i++){
@@ -376,7 +392,6 @@ public class StudApplication extends Application {
         }
 
     }
-
 
     private void setAPKResources(AssetManager newAssetManager) throws  Exception{
         Reflect.on(newAssetManager).call("ensureStringBlocks");
@@ -423,36 +438,6 @@ public class StudApplication extends Application {
                 while(Reflect.on(typedArrayPool).call("acquire").get() != null);
             }
         }
-    }
-
-
-    public static Boolean isX86Arch() {
-        try {
-            for (String contains : Build.SUPPORTED_32_BIT_ABIS) {
-                if (contains.contains("x86")) {
-                    return Boolean.valueOf(true);
-                }
-            }
-        } catch (NoSuchFieldError e) {
-            if (Build.CPU_ABI.contains("x86") || Build.CPU_ABI2.contains("x86")) {
-                return Boolean.valueOf(true);
-            }
-            try {
-                RandomAccessFile randomAccessFile = new RandomAccessFile("/system/build.prop", "r");
-                String readLine = randomAccessFile.readLine();
-                while (readLine != null) {
-                    if (readLine.contains("ro.product.cpu.abi") && readLine.contains("x86")) {
-                        return Boolean.valueOf(true);
-                    }
-                    readLine = randomAccessFile.readLine();
-                }
-            } catch (FileNotFoundException e2) {
-                e2.printStackTrace();
-            } catch (IOException e3) {
-                e3.printStackTrace();
-            }
-        }
-        return Boolean.valueOf(false);
     }
 
 

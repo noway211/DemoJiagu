@@ -55,10 +55,14 @@ def repackApk(inputApk):
 
 
     #删除原工程的无用文件
-    if os.path.exists(temp_apk_recompile_dir+"/smali"):
-        del_file(temp_apk_recompile_dir+"/smali")
-    if os.path.exists(temp_apk_recompile_dir+"/assets"):
-        del_file(temp_apk_recompile_dir+"/assets")
+    file_array = os.listdir(temp_apk_recompile_dir)
+    for dex_file in file_array:
+        if dex_file.startswith('smali'):
+            del_file(temp_apk_recompile_dir+"/"+dex_file);
+    # if os.path.exists(temp_apk_recompile_dir+"/smali"):
+    #     del_file(temp_apk_recompile_dir+"/smali")
+    # if os.path.exists(temp_apk_recompile_dir+"/assets"):
+    #     del_file(temp_apk_recompile_dir+"/assets")
     # if os.path.exists(temp_apk_recompile_dir+"/lib"):
     #     del_file(temp_apk_recompile_dir+"/lib")
 

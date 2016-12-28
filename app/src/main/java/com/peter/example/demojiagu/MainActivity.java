@@ -13,7 +13,8 @@ public class MainActivity extends Activity {
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
-        Log.d("demo","MainActivity"+this.getApplication().toString());
+        Log.d("demopeter","MainActivity"+this.getApplication().toString());
+        Log.d("demopeter","MainActivity"+this.getApplicationInfo().dataDir);
     }
 
     public void onClick(View view) {
